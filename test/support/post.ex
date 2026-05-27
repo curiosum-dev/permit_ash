@@ -1,0 +1,50 @@
+defmodule Permit.Ash.Test.Post do
+  @moduledoc false
+  use Ash.Resource,
+    domain: Permit.Ash.Test.Domain,
+    data_layer: Ash.DataLayer.Ets,
+    authorizers: [Permit.Ash.Authorizer]
+
+  ets do
+    # Private tables are scoped to the owning process, giving each test process
+    # its own isolated data store.
+    private? true
+  end
+
+  attributes do
+    uuid_primary_key :id
+
+    attribute :title, :string do
+      default "untitled"
+      public? true
+    end
+
+    attribute :user_id, :integer do
+      allow_nil? true
+      public? true
+    end
+
+    attribute :published, :boolean do
+      default false
+      allow_nil? false
+      public? true
+    end
+
+    attribute :score, :integer do
+      default 0
+      public? true
+    end
+  end
+
+  actions do
+    defaults [:read, :destroy]
+
+    create :create do
+      accept [:title, :user_id, :published, :score]
+    end
+
+    update :update do
+      accept [:title, :published, :score]
+    end
+  end
+end

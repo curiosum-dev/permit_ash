@@ -1,6 +1,8 @@
 defmodule Permit.Ash.Authorizer do
   @behaviour Ash.Authorizer
 
+  alias Permit.Ash.FilterBuilder
+
   @impl true
   def initial_state(actor, resource, action, domain) do
     # Authorization module configured in :domain via spark dsl
@@ -24,33 +26,123 @@ defmodule Permit.Ash.Authorizer do
   end
 
   @impl true
-  def strict_check_context(state) do
-    # Ash will add the basics of :query and :changeset for me
-    []
+  def strict_check_context(_state), do: []
+
+  # Called by Ash when check/2 returns {:error, :forbidden, state} or when
+  # {:continue, state} is returned but Ash cannot run the check phase
+  # (no_check?: true). Returning Ash.Error.Forbidden ensures Ash classifies
+  # the result correctly rather than wrapping it as Ash.Error.Unknown.
+  @impl true
+  def exception(_reason, _state), do: Ash.Error.Forbidden.exception([])
+
+  # Anonymous actors can never be authorized.
+  @impl true
+  def strict_check(%{permit: %{subject: nil}} = _state, _context) do
+    {:error, Ash.Error.Forbidden.exception([])}
+  end
+
+  # For updates and destroys the record being mutated is available in
+  # context[:changeset].data. Do the per-record Permit check right here so
+  # Ash's atomic update path (which requires a definitive strict_check answer
+  # and passes no_check?: true) gets a clear authorized/forbidden decision
+  # without needing to fall through to check/2.
+  def strict_check(
+        %{
+          action: %{type: type},
+          permit: %{
+            subject: subject,
+            action: action,
+            authorization_module: auth_module
+          }
+        } = state,
+        %{changeset: %Ash.Changeset{data: record}}
+      )
+      when type in [:update, :destroy] and not is_nil(record) do
+    if Permit.ResolverBase.authorized?(subject, auth_module, record, action) do
+      {:authorized, state}
+    else
+      {:error, :forbidden}
+    end
+  end
+
+  # For reads: translate Permit rules to DB-level Ash filter expressions where
+  # possible, falling back to check/2 per-record filtering for untranslatable
+  # conditions (function conditions, :like, :ilike, :match).
+  #
+  # For creates: fall through to the filter/continue logic below; creates are
+  # handled by the filter path (Ash stashes filters for post-creation checks)
+  # or by check/2 (via {:continue, state}).
+  def strict_check(
+        %{
+          permit: %{
+            subject: subject,
+            action: action,
+            resource: resource,
+            authorization_module: auth_module
+          }
+        } = state,
+        _context
+      ) do
+    permissions = auth_module.can(subject).permissions
+    dnf = Map.get(permissions.conditions_map, {action, resource})
+
+    case FilterBuilder.build(dnf, subject, resource) do
+      {:ok, :unconditional} ->
+        # At least one rule branch is unconditional: every record passes.
+        {:authorized, state}
+
+      {:ok, keyword_filter} when action == :read ->
+        # All conditions are translatable: push the filter to the DB query.
+        # Tuple order confirmed from Ash.Policy.Authorizer and can.ex:
+        # {:filter, state, filter}.
+        {:filter, state, keyword_filter}
+
+      {:ok, _keyword_filter} ->
+        # Non-read action with translatable conditions: let check/2 handle it.
+        # (For writes, Ash stores inspect(authorizer) as a string in the
+        # filter error placeholder, causing a crash on the forbidden path.)
+        {:continue, state}
+
+      {:error, :untranslatable} ->
+        # A condition requires runtime evaluation (function condition or
+        # unsupported operator like :like). Ash fetches records and check/2
+        # filters them in-process.
+        {:continue, state}
+
+      {:error, :no_rules} ->
+        # No direct DNF entry for {action, resource_module}. Can happen when
+        # the permission was granted via an action group (e.g. :manage implies
+        # :create). Fall back to Permit's transitive authorized? check; if
+        # authorized, check/2 handles per-record filtering.
+        if Permit.ResolverBase.authorized?(subject, auth_module, resource, action) do
+          {:continue, state}
+        else
+          {:error, Ash.Error.Forbidden.exception([])}
+        end
+    end
   end
 
   @impl true
-  def strict_check(%{permit: permit} = state, context) do
-    %{
-      subject: subject,
-      action: action,
-      resource: resource,
-      authorization_module: authorization_module
-    } = permit
+  def check_context(_state), do: []
 
-    case resource do
-      # Asking general permission to resource module - no need to check into specific record
-      module when is_atom(module) ->
-        ok? =
-          authorization_module.can(subject)
-          |> authorization_module.do?(action, resource)
+  @impl true
+  def check(
+        %{
+          permit: %{
+            subject: subject,
+            action: action,
+            authorization_module: auth_module
+          }
+        } = _state,
+        context
+      ) do
+    records = context[:data] || []
 
-        if ok?, do: {:authorized, state}, else: {:error, :forbidden}
+    authorized =
+      Enum.filter(records, fn record ->
+        Permit.ResolverBase.authorized?(subject, auth_module, record, action)
+      end)
 
-      # Asking permission on specific record - continue to next phase (Ash should own the
-      # fetching, not Permit's and Permit.Ecto's resolvers as used by Permit.Phoenix)
-      struct when is_struct(struct) ->
-        {:continue, state}
-    end
+    {:data, authorized}
   end
 end
