@@ -27,8 +27,9 @@ defmodule Permit.Ash.FilterBuilder do
 
     * Function conditions (`:function_1`, `:function_2`) — arbitrary Elixir functions cannot
       be expressed as SQL predicates.
-    * Association conditions (`{:association, _}`) — require JOIN semantics that depend on
-      Ash relationship metadata; not yet implemented.
+    * Pattern/regex operators (`:like`, `:ilike`, `:match`) used inside association
+      conditions — these have no Ash filter equivalent in core Ash regardless of nesting
+      depth.
     * `:like`, `:ilike`, `:match` — no direct Ash filter operator equivalents in core Ash.
   """
 
@@ -145,9 +146,30 @@ defmodule Permit.Ash.FilterBuilder do
     operator_to_filter(operator_module, key, value, not?)
   end
 
-  # Association, function, and unknown conditions cannot be pushed to the DB.
-  defp translate_condition(%ParsedCondition{condition_type: {:association, _}}, _, _),
-    do: {:error, :untranslatable}
+  # Association condition: translate nested keyword conditions recursively.
+  # The nested values support simple equality and further nesting. Operator
+  # tuples at nested levels (e.g. `author: [score: {:gt, 5}]`) are not
+  # supported — Permit.Ecto does not handle them correctly either.
+  defp translate_condition(
+         %ParsedCondition{
+           condition: {key, val_fn},
+           condition_type: {:association, _},
+           not: not?
+         },
+         subject,
+         resource_module
+       ) do
+    nested = val_fn.(subject, resource_module)
+
+    case translate_assoc_conditions(nested) do
+      {:ok, ash_nested} ->
+        filter = [{key, ash_nested}]
+        {:ok, if(not?, do: [{:not, filter}], else: filter)}
+
+      {:error, _} = error ->
+        error
+    end
+  end
 
   defp translate_condition(%ParsedCondition{condition_type: :function_1}, _, _),
     do: {:error, :untranslatable}
@@ -225,4 +247,81 @@ defmodule Permit.Ash.FilterBuilder do
   defp operator_to_filter(Permit.Operators.Match, _, _, _), do: {:error, :untranslatable}
 
   defp operator_to_filter(_unknown, _, _, _), do: {:error, :untranslatable}
+
+  # ---------------------------------------------------------------------------
+  # Private: association nested condition translation
+  #
+  # Permit stores nested association conditions as raw keyword lists returned
+  # by the condition's val_fn. Values at the leaf level may be plain scalars
+  # (equality), Permit operator tuples (e.g. {:gt, 5}), or further nested
+  # keyword lists (deeper association path). All operator forms supported at the
+  # top level are supported here too, by routing through operator_to_filter/4
+  # via raw_op_to_module/1.
+  #
+  # nil at leaf level is treated as IS NULL (matching Permit's top-level nil
+  # handling, where ConditionParser converts nil to an IsNil operator).
+  #
+  # Pattern/regex operators (:like, :ilike, :match) remain untranslatable.
+  # ---------------------------------------------------------------------------
+
+  defp translate_assoc_conditions(conditions) when is_list(conditions) do
+    Enum.reduce_while(conditions, {:ok, []}, fn {field, raw_value}, {:ok, acc} ->
+      case translate_assoc_leaf(field, raw_value) do
+        {:ok, fragment} -> {:cont, {:ok, acc ++ fragment}}
+        {:error, _} = error -> {:halt, error}
+      end
+    end)
+  end
+
+  # nil → IS NULL (mirrors Permit's top-level ConditionParser nil handling).
+  defp translate_assoc_leaf(field, nil),
+    do: {:ok, [{field, [is_nil: true]}]}
+
+  # {:not, nil} → IS NOT NULL
+  defp translate_assoc_leaf(field, {:not, nil}),
+    do: {:ok, [{field, [is_nil: false]}]}
+
+  # {:not, value} → NOT EQUAL (Permit treats {eq, value} with not: true)
+  defp translate_assoc_leaf(field, {:not, value}),
+    do: operator_to_filter(Permit.Operators.Eq, field, value, true)
+
+  # {{:not, op}, value} → negated operator, e.g. {{:not, :gt}, 3} = lte: 3
+  defp translate_assoc_leaf(field, {{:not, op}, value}) when is_atom(op) do
+    case raw_op_to_module(op) do
+      {:ok, module} -> operator_to_filter(module, field, value, true)
+      error -> error
+    end
+  end
+
+  # {:op, value} → operator tuple, e.g. {:gt, 5}, {:in, [1, 2, 3]}
+  defp translate_assoc_leaf(field, {op, value}) when is_atom(op) do
+    case raw_op_to_module(op) do
+      {:ok, module} -> operator_to_filter(module, field, value, false)
+      error -> error
+    end
+  end
+
+  # Nested keyword list → recurse into the next level of the association path.
+  defp translate_assoc_leaf(field, raw_value) when is_list(raw_value) do
+    case translate_assoc_conditions(raw_value) do
+      {:ok, nested} -> {:ok, [{field, nested}]}
+      error -> error
+    end
+  end
+
+  # Plain scalar (boolean, integer, string, atom) → simple equality.
+  defp translate_assoc_leaf(field, raw_value),
+    do: {:ok, [{field, raw_value}]}
+
+  # Maps Permit's raw DSL operator atoms to Permit operator modules so that
+  # operator_to_filter/4 can be reused for nested association conditions.
+  defp raw_op_to_module(op) when op in [:==, :eq], do: {:ok, Permit.Operators.Eq}
+  defp raw_op_to_module(op) when op in [:!=, :neq], do: {:ok, Permit.Operators.Neq}
+  defp raw_op_to_module(op) when op in [:>, :gt], do: {:ok, Permit.Operators.Gt}
+  defp raw_op_to_module(op) when op in [:<, :lt], do: {:ok, Permit.Operators.Lt}
+  defp raw_op_to_module(op) when op in [:>=, :ge], do: {:ok, Permit.Operators.Ge}
+  defp raw_op_to_module(op) when op in [:<=, :le], do: {:ok, Permit.Operators.Le}
+  defp raw_op_to_module(op) when op in [:is_nil, :nil?], do: {:ok, Permit.Operators.IsNil}
+  defp raw_op_to_module(:in), do: {:ok, Permit.Operators.In}
+  defp raw_op_to_module(_), do: {:error, :untranslatable}
 end

@@ -4,13 +4,19 @@ defmodule Permit.Ash.AuthorizerTest do
   # With private? true on the ETS data layer, each test process gets its own
   # isolated in-memory table — no setup/teardown needed.
 
-  alias Permit.Ash.Test.Post
+  alias Permit.Ash.Test.{Author, Post}
 
   # ---------------------------------------------------------------------------
   # Helpers
   # ---------------------------------------------------------------------------
 
   defp ids(records), do: MapSet.new(records, & &1.id)
+
+  defp create_author!(attrs \\ %{}) do
+    Author
+    |> Ash.Changeset.for_create(:create, Map.merge(%{active: true}, attrs))
+    |> Ash.create!(authorize?: false)
+  end
 
   defp create_post!(attrs \\ %{}) do
     defaults = %{title: "untitled", user_id: nil, published: false, score: 0}
@@ -304,6 +310,90 @@ defmodule Permit.Ash.AuthorizerTest do
                  actor: %{id: 1, role: :no_access}
                )
                |> Ash.update()
+    end
+  end
+
+  # ---------------------------------------------------------------------------
+  # Association conditions (belongs_to) — translated to Ash relationship filter
+  # FilterBuilder returns {:ok, [author: [active: true]]} which Ash resolves
+  # via its relationship filter path (JOIN for SQL, in-memory for ETS).
+  # ---------------------------------------------------------------------------
+
+  describe "association condition — belongs_to" do
+    test "reads only posts belonging to active authors" do
+      active = create_author!(%{active: true})
+      inactive = create_author!(%{active: false})
+
+      post_with_active = create_post!(%{author_id: active.id})
+      _post_with_inactive = create_post!(%{author_id: inactive.id})
+      _post_no_author = create_post!(%{author_id: nil})
+
+      results = read_posts!(%{role: :via_active_author})
+      assert ids(results) == ids([post_with_active])
+    end
+
+    test "returns empty when no posts have active authors" do
+      inactive = create_author!(%{active: false})
+      _post = create_post!(%{author_id: inactive.id})
+
+      results = read_posts!(%{role: :via_active_author})
+      assert results == []
+    end
+
+    test "negated condition: reads posts belonging to inactive authors" do
+      active = create_author!(%{active: true})
+      inactive = create_author!(%{active: false})
+
+      _post_with_active = create_post!(%{author_id: active.id})
+      post_with_inactive = create_post!(%{author_id: inactive.id})
+
+      results = read_posts!(%{role: :via_inactive_author})
+      assert ids(results) == ids([post_with_inactive])
+    end
+
+    test "posts without an author are excluded from association-gated reads" do
+      _post_no_author = create_post!(%{author_id: nil})
+      active = create_author!(%{active: true})
+      post_with_active = create_post!(%{author_id: active.id})
+
+      results = read_posts!(%{role: :via_active_author})
+      assert ids(results) == ids([post_with_active])
+    end
+  end
+
+  # ---------------------------------------------------------------------------
+  # Association conditions with operator tuples in nested position
+  # FilterBuilder routes {:gt, 5} etc. through raw_op_to_module/1 →
+  # operator_to_filter/4, producing the same Ash filter as top-level operators.
+  # ---------------------------------------------------------------------------
+
+  describe "association condition with nested operator tuple" do
+    test "gt in nested position — reads posts by authors with level > 2" do
+      low = create_author!(%{level: 1})
+      mid = create_author!(%{level: 2})
+      high = create_author!(%{level: 3})
+      higher = create_author!(%{level: 5})
+
+      _post_low = create_post!(%{author_id: low.id})
+      _post_mid = create_post!(%{author_id: mid.id})
+      post_high = create_post!(%{author_id: high.id})
+      post_higher = create_post!(%{author_id: higher.id})
+
+      results = read_posts!(%{role: :via_high_level_author})
+      assert ids(results) == ids([post_high, post_higher])
+    end
+
+    test "negated operator in nested position — reads posts by authors with level > 1" do
+      beginner = create_author!(%{level: 1})
+      intermediate = create_author!(%{level: 2})
+      expert = create_author!(%{level: 4})
+
+      _post_beginner = create_post!(%{author_id: beginner.id})
+      post_intermediate = create_post!(%{author_id: intermediate.id})
+      post_expert = create_post!(%{author_id: expert.id})
+
+      results = read_posts!(%{role: :via_non_beginner_author})
+      assert ids(results) == ids([post_intermediate, post_expert])
     end
   end
 end

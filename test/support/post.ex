@@ -36,11 +36,19 @@ defmodule Permit.Ash.Test.Post do
     end
   end
 
+  relationships do
+    belongs_to :author, Permit.Ash.Test.Author do
+      allow_nil? true
+      attribute_writable? true
+      public? true
+    end
+  end
+
   actions do
     defaults [:read, :destroy]
 
     create :create do
-      accept [:title, :user_id, :published, :score]
+      accept [:title, :user_id, :published, :score, :author_id]
     end
 
     update :update do

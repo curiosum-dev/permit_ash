@@ -71,6 +71,30 @@ defmodule Permit.Ash.Test.Permissions do
     |> read(Post, fn post -> post.user_id == user_id end)
   end
 
+  # Association condition (belongs_to): posts whose author is active.
+  def can(%{role: :via_active_author}) do
+    permit()
+    |> read(Post, author: [active: true])
+  end
+
+  # Association condition (belongs_to): posts whose author is inactive.
+  def can(%{role: :via_inactive_author}) do
+    permit()
+    |> read(Post, author: [active: false])
+  end
+
+  # Association condition with operator tuple: posts by high-level authors.
+  def can(%{role: :via_high_level_author}) do
+    permit()
+    |> read(Post, author: [level: {:gt, 2}])
+  end
+
+  # Association condition with negated operator: posts by non-beginner authors.
+  def can(%{role: :via_non_beginner_author}) do
+    permit()
+    |> read(Post, author: [level: {{:not, :le}, 1}])
+  end
+
   # No rules — every action is forbidden.
   def can(%{role: :no_access}), do: permit()
 
