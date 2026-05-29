@@ -3,12 +3,13 @@ defmodule Permit.Ash.Resource.Transformer do
   use Spark.Dsl.Transformer
 
   alias Permit.Ash.Resource.ActorRule
+  alias Spark.Dsl.Transformer
 
   @doc false
   def transform(dsl_state) do
     for_actor_entities =
       dsl_state
-      |> Spark.Dsl.Transformer.get_entities([:permit])
+      |> Transformer.get_entities([:permit])
       |> Enum.filter(&match?(%ActorRule{}, &1))
 
     # Build one function clause per for_actor block, then the catchall.
@@ -36,7 +37,7 @@ defmodule Permit.Ash.Resource.Transformer do
           def __permit_rules__(_), do: []
         end
 
-    {:ok, Spark.Dsl.Transformer.eval(dsl_state, [], combined)}
+    {:ok, Transformer.eval(dsl_state, [], combined)}
   end
 
   # Build a single `def __permit_rules__(pattern) do rules end` clause.
