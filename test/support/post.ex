@@ -46,7 +46,7 @@ defmodule Permit.Ash.Test.Post do
   end
 
   permit do
-    map_action :publish, to: :update
+    map_action(:publish, to: :update)
   end
 
   actions do
