@@ -65,5 +65,11 @@ defmodule Permit.Ash.Test.Post do
     update :publish do
       accept [:published]
     end
+
+    # Custom update action used to test map_action resolution: :publish maps
+    # to the Permit :update action, so update permissions cover it.
+    update :publish do
+      accept [:published]
+    end
   end
 end
