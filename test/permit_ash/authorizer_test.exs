@@ -361,6 +361,49 @@ defmodule Permit.Ash.AuthorizerTest do
   end
 
   # ---------------------------------------------------------------------------
+  # map_action — custom Ash action name resolved to a Permit action name
+  # Post declares: map_action :publish, to: :update
+  # The authorizer substitutes :update so existing update permissions apply.
+  # ---------------------------------------------------------------------------
+
+  describe "map_action — :publish resolves to :update" do
+    test "owner can publish their own post (update permission covers mapped action)" do
+      post = create_post!(%{user_id: 1, published: false})
+
+      assert {:ok, updated} =
+               post
+               |> Ash.Changeset.for_update(:publish, %{published: true},
+                 actor: %{id: 1, role: :owner}
+               )
+               |> Ash.update()
+
+      assert updated.published == true
+    end
+
+    test "owner cannot publish another user's post" do
+      post = create_post!(%{user_id: 2, published: false})
+
+      assert {:error, _} =
+               post
+               |> Ash.Changeset.for_update(:publish, %{published: true},
+                 actor: %{id: 1, role: :owner}
+               )
+               |> Ash.update()
+    end
+
+    test "no_access role cannot publish any post" do
+      post = create_post!(%{user_id: 1, published: false})
+
+      assert {:error, _} =
+               post
+               |> Ash.Changeset.for_update(:publish, %{published: true},
+                 actor: %{id: 1, role: :no_access}
+               )
+               |> Ash.update()
+    end
+  end
+
+  # ---------------------------------------------------------------------------
   # Association conditions with operator tuples in nested position
   # FilterBuilder routes {:gt, 5} etc. through raw_op_to_module/1 →
   # operator_to_filter/4, producing the same Ash filter as top-level operators.
