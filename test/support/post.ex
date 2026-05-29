@@ -8,51 +8,51 @@ defmodule Permit.Ash.Test.Post do
   ets do
     # Private tables are scoped to the owning process, giving each test process
     # its own isolated data store.
-    private? true
+    private?(true)
   end
 
   attributes do
-    uuid_primary_key :id
+    uuid_primary_key(:id)
 
     attribute :title, :string do
-      default "untitled"
-      public? true
+      default("untitled")
+      public?(true)
     end
 
     attribute :user_id, :integer do
-      allow_nil? true
-      public? true
+      allow_nil?(true)
+      public?(true)
     end
 
     attribute :published, :boolean do
-      default false
-      allow_nil? false
-      public? true
+      default(false)
+      allow_nil?(false)
+      public?(true)
     end
 
     attribute :score, :integer do
-      default 0
-      public? true
+      default(0)
+      public?(true)
     end
   end
 
   relationships do
     belongs_to :author, Permit.Ash.Test.Author do
-      allow_nil? true
-      attribute_writable? true
-      public? true
+      allow_nil?(true)
+      attribute_writable?(true)
+      public?(true)
     end
   end
 
   actions do
-    defaults [:read, :destroy]
+    defaults([:read, :destroy])
 
     create :create do
-      accept [:title, :user_id, :published, :score, :author_id]
+      accept([:title, :user_id, :published, :score, :author_id])
     end
 
     update :update do
-      accept [:title, :published, :score]
+      accept([:title, :published, :score])
     end
   end
 end

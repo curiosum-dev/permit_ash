@@ -21,3 +21,6 @@ permit_ash-*.tar
 
 # Temporary files, for example, from tests.
 /tmp/
+
+# Dialyzer PLT files (cached in CI, not committed).
+/priv/plts/

@@ -1,12 +1,15 @@
 defmodule Permit.Ash.Authorizer do
+  @moduledoc false
   @behaviour Ash.Authorizer
 
+  alias Ash.Error.Forbidden
+  alias Permit.Ash.Domain.Info, as: DomainInfo
   alias Permit.Ash.FilterBuilder
 
   @impl true
   def initial_state(actor, resource, action, domain) do
     # Authorization module configured in :domain via spark dsl
-    authorization_module = Permit.Ash.Domain.Info.permit_authorization_module!(domain)
+    authorization_module = DomainInfo.permit_authorization_module!(domain)
 
     %{
       actor: actor,
@@ -33,12 +36,12 @@ defmodule Permit.Ash.Authorizer do
   # (no_check?: true). Returning Ash.Error.Forbidden ensures Ash classifies
   # the result correctly rather than wrapping it as Ash.Error.Unknown.
   @impl true
-  def exception(_reason, _state), do: Ash.Error.Forbidden.exception([])
+  def exception(_reason, _state), do: Forbidden.exception([])
 
   # Anonymous actors can never be authorized.
   @impl true
   def strict_check(%{permit: %{subject: nil}} = _state, _context) do
-    {:error, Ash.Error.Forbidden.exception([])}
+    {:error, Forbidden.exception([])}
   end
 
   # For updates and destroys the record being mutated is available in
@@ -117,7 +120,7 @@ defmodule Permit.Ash.Authorizer do
         if Permit.ResolverBase.authorized?(subject, auth_module, resource, action) do
           {:continue, state}
         else
-          {:error, Ash.Error.Forbidden.exception([])}
+          {:error, Forbidden.exception([])}
         end
     end
   end

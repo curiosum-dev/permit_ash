@@ -12,7 +12,7 @@ defmodule Permit.Ash.AuthorizerTest do
 
   defp ids(records), do: MapSet.new(records, & &1.id)
 
-  defp create_author!(attrs \\ %{}) do
+  defp create_author!(attrs) do
     Author
     |> Ash.Changeset.for_create(:create, Map.merge(%{active: true}, attrs))
     |> Ash.create!(authorize?: false)
@@ -53,7 +53,6 @@ defmodule Permit.Ash.AuthorizerTest do
                Post
                |> Ash.Changeset.for_create(:create, %{title: "anon post"}, authorize?: true)
                |> Ash.create()
-               |> IO.inspect()
     end
   end
 

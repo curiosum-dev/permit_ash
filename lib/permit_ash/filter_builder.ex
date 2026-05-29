@@ -34,8 +34,8 @@ defmodule Permit.Ash.FilterBuilder do
   """
 
   alias Permit.Permissions.DisjunctiveNormalForm
-  alias Permit.Permissions.ParsedConditionList
   alias Permit.Permissions.ParsedCondition
+  alias Permit.Permissions.ParsedConditionList
 
   @doc """
   Builds an Ash filter keyword list from a Permit `DisjunctiveNormalForm`.
@@ -73,21 +73,25 @@ defmodule Permit.Ash.FilterBuilder do
           {:halt, error}
       end
     end)
-    |> case do
-      {:ok, :unconditional} -> {:ok, :unconditional}
-      {:ok, []} -> {:error, :no_rules}
-      {:ok, [single]} -> {:ok, single}
-      {:ok, many} -> {:ok, [or: many]}
-      {:error, _} = error -> error
-    end
+    |> collect_branches()
   end
+
+  defp collect_branches({:ok, :unconditional}), do: {:ok, :unconditional}
+  defp collect_branches({:ok, []}), do: {:error, :no_rules}
+  defp collect_branches({:ok, [single]}), do: {:ok, single}
+  defp collect_branches({:ok, many}), do: {:ok, [or: many]}
+  defp collect_branches({:error, _} = error), do: error
 
   # ---------------------------------------------------------------------------
   # Private: conjunction (AND of conditions)
   # ---------------------------------------------------------------------------
 
   # Returns: :unconditional | :impossible | {:ok, keyword()} | {:error, :untranslatable}
-  defp translate_conjunction(%ParsedConditionList{conditions: conditions}, subject, resource_module) do
+  defp translate_conjunction(
+         %ParsedConditionList{conditions: conditions},
+         subject,
+         resource_module
+       ) do
     conditions
     |> Enum.reduce_while({:ok, []}, fn condition, {:ok, predicates} ->
       case translate_condition(condition, subject, resource_module) do

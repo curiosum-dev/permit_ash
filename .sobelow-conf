@@ -1,0 +1,5 @@
+[
+  verbose: false,
+  format: "txt",
+  exit: :low
+]
