@@ -47,6 +47,17 @@ defmodule Permit.Ash.Test.Post do
 
   permit do
     map_action(:publish, to: :update)
+
+    # for_actor rules used by DomainPermissions tests.
+    for_actor %{role: :admin} do
+      all()
+    end
+
+    for_actor %{id: user_id, role: :owner} do
+      read()
+      create()
+      update(user_id: user_id)
+    end
   end
 
   actions do
@@ -58,12 +69,6 @@ defmodule Permit.Ash.Test.Post do
 
     update :update do
       accept([:title, :published, :score])
-    end
-
-    # Custom update action used to test map_action resolution: :publish maps
-    # to the Permit :update action, so update permissions cover it.
-    update :publish do
-      accept [:published]
     end
 
     # Custom update action used to test map_action resolution: :publish maps

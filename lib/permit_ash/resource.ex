@@ -12,6 +12,15 @@ defmodule Permit.Ash.Resource do
 
         permit do
           map_action :archive, to: :update
+
+          for_actor %User{role: :admin} do
+            all()
+          end
+
+          for_actor %User{id: user_id} do
+            read()
+            update(user_id: user_id)
+          end
         end
       end
 
@@ -22,13 +31,53 @@ defmodule Permit.Ash.Resource do
   authorizer substitutes the mapped Permit action name before performing
   any authorization checks.
 
-  Mappings are independent per resource — `Post` and `Comment` can map
-  `:archive` to different Permit actions without conflict.
+  ## `for_actor`
 
-  Without any `map_action` declarations the authorizer uses the Ash action
-  name directly, which is the recommended approach when using
-  `Permit.Ash.Actions` as your actions module.
+  Declares authorization rules for a specific actor pattern. The pattern is
+  matched at runtime, and the block specifies which actions are permitted.
+
+  Use the helper macros `read/0,1`, `create/0,1`, `update/0,1`, `destroy/0,1`,
+  and `all/0,1` inside the block. Each accepts an optional keyword list of
+  conditions.
+
+  Use `Permit.Ash.DomainPermissions` to aggregate rules from all resources in
+  a domain into a `Permit.Permissions`-compatible `can/1` callback.
   """
+
+  @action_entity %Spark.Dsl.Entity{
+    name: :action,
+    describe: "Grants permission for a specific action inside a for_actor block.",
+    args: [:action_name, :conditions],
+    target: Permit.Ash.Resource.ActionRule,
+    schema: [
+      action_name: [
+        type: :atom,
+        required: true,
+        doc: "The action to permit. Use :all to permit every action."
+      ],
+      conditions: [
+        type: :quoted,
+        required: true,
+        doc: "Keyword-list conditions, e.g. [user_id: user_id]. Pass [] for unconditional."
+      ]
+    ]
+  }
+
+  @for_actor_entity %Spark.Dsl.Entity{
+    name: :for_actor,
+    describe: "Declares authorization rules for actors matching the given pattern.",
+    args: [:pattern],
+    target: Permit.Ash.Resource.ActorRule,
+    entities: [rules: [@action_entity]],
+    imports: [Permit.Ash.Resource.ActionDSL],
+    schema: [
+      pattern: [
+        type: :quoted,
+        required: true,
+        doc: "A pattern (struct, map, or literal) that the actor must match."
+      ]
+    ]
+  }
 
   @map_action %Spark.Dsl.Entity{
     name: :map_action,
@@ -53,8 +102,10 @@ defmodule Permit.Ash.Resource do
   @permit %Spark.Dsl.Section{
     name: :permit,
     describe: "Permit authorization configuration for this Ash resource.",
-    entities: [@map_action]
+    entities: [@map_action, @for_actor_entity]
   }
 
-  use Spark.Dsl.Extension, sections: [@permit]
+  use Spark.Dsl.Extension,
+    sections: [@permit],
+    transformers: [Permit.Ash.Resource.Transformer]
 end
