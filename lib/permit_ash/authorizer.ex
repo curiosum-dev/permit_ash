@@ -6,6 +6,11 @@ defmodule Permit.Ash.Authorizer do
   alias Permit.Ash.Domain.Info, as: DomainInfo
   alias Permit.Ash.FilterBuilder
 
+  # Ash.Authorizer types the `resource` argument of initial_state/4 as
+  # Ash.Resource.Record.t() (= struct()), but Ash actually passes the resource
+  # MODULE (an atom) at runtime. Suppress the false-positive callback mismatch.
+  @dialyzer {:nowarn_function, initial_state: 4}
+
   @impl true
   def initial_state(actor, resource, action, domain) do
     # Authorization module configured in :domain via spark dsl
