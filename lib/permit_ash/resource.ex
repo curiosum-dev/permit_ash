@@ -6,7 +6,9 @@ defmodule Permit.Ash.Resource do
   ## Usage
 
       defmodule MyApp.Post do
-        use Ash.Resource, extensions: [Permit.Ash.Resource]
+        use Ash.Resource,
+          authorizers: [Permit.Ash.Authorizer],
+          extensions: [Permit.Ash.Resource]
 
         permit do
           map_action :archive, to: :update

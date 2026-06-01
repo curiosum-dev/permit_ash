@@ -10,9 +10,33 @@ defmodule Permit.Ash.Actions do
 
   ## Usage
 
+  Declare the custom action on the Ash resource as usual:
+
+      defmodule MyApp.Post do
+        use Ash.Resource,
+          domain: MyApp.Domain,
+          authorizers: [Permit.Ash.Authorizer],
+          extensions: [Permit.Ash.Resource]
+
+        actions do
+          defaults [:read, :destroy, :create, :update]
+
+          update :archive do
+            accept []
+            change set_attribute(:archived, true)
+          end
+        end
+      end
+
+  Point `Permit.Ash.Actions` at the domain — it collects every action name,
+  including `:archive`, at compile time:
+
       defmodule MyApp.AshActions do
         use Permit.Ash.Actions, domain: MyApp.Domain
       end
+
+  Use the generated action helper in the permissions module just like any
+  other Permit action:
 
       defmodule MyApp.Permissions do
         use Permit.Permissions, actions_module: MyApp.AshActions
