@@ -56,7 +56,7 @@ defmodule Permit.Ash.Test.Post do
     for_actor %{id: user_id, role: :owner} do
       action(:read)
       action(:create)
-      action(:update, [user_id: user_id])
+      action(:update, user_id: user_id)
     end
   end
 
