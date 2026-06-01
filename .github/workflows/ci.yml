@@ -61,8 +61,6 @@ jobs:
         with:
           path: priv/plts
           key: ${{ runner.os }}-plt-${{ matrix.elixir }}-${{ matrix.otp }}-${{ hashFiles('mix.lock') }}
-          restore-keys: |
-            ${{ runner.os }}-plt-${{ matrix.elixir }}-${{ matrix.otp }}-
 
       - name: Create PLT
         if: steps.plt-cache.outputs.cache-hit != 'true'
