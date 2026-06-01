@@ -51,6 +51,9 @@ defmodule Permit.Ash.DomainPermissions do
   end
 
   @doc false
+  # Iterate over each resource in the domain and call `__permit_rules__/1` on it
+  # with current actor, as if you were calling `MyApp.Permissions.can/1`. The `can/1`
+  # argument gets passed to `__permit_rules__/1` as the Permit subject..
   def build_permissions(actor, domain, actions_module) do
     all_actions = Actions.list_groups(actions_module)
 
@@ -61,6 +64,8 @@ defmodule Permit.Ash.DomainPermissions do
     end)
   end
 
+  # If Permit.Ash.Resource.Transformer has injected a `__permit_rules__` function into
+  # the resource module, apply it to the actor to get the resource's permission rules.
   defp apply_resource_rules(perms, resource, actor, all_actions) do
     if function_exported?(resource, :__permit_rules__, 1) do
       resource.__permit_rules__(actor)

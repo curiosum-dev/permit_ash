@@ -7,12 +7,15 @@ defmodule Permit.Ash.Resource.Transformer do
 
   @doc false
   def transform(dsl_state) do
+    # Read ActorRule data (the actor's pattern expression and rules) from parsed
+    # DSL state in the `permit do ... end` block
     for_actor_entities =
       dsl_state
       |> Transformer.get_entities([:permit])
       |> Enum.filter(&match?(%ActorRule{}, &1))
 
-    # Build one function clause per for_actor block, then the catchall.
+    # Build one function clause per for_actor block, then the catchall (for when the
+    # actor doesn't match any for_actor pattern).
     clauses =
       for_actor_entities
       |> Enum.map(&build_clause/1)
@@ -37,6 +40,8 @@ defmodule Permit.Ash.Resource.Transformer do
           def __permit_rules__(_), do: []
         end
 
+    # Inject the combination of clauses of the `__permit_rules__` function into our
+    # Ash resource module.
     {:ok, Transformer.eval(dsl_state, [], combined)}
   end
 
