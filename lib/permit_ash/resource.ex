@@ -14,12 +14,12 @@ defmodule Permit.Ash.Resource do
           map_action :archive, to: :update
 
           for_actor %User{role: :admin} do
-            action(:all, [])
+            action(:all)
           end
 
           for_actor %User{id: user_id} do
-            action(:read, [])
-            action(:update, [user_id: user_id])
+            action(:read)
+            action(:update, user_id: user_id)
           end
         end
       end
@@ -36,10 +36,10 @@ defmodule Permit.Ash.Resource do
   Declares authorization rules for a specific actor pattern. The pattern is
   matched at runtime, and the block specifies which actions are permitted.
 
-  Use `action(:name, conditions)` to grant a specific action, or
-  `action(:all, [])` to grant every action defined in the domain's actions
-  module. No action names are hard-coded — any atom that is a valid action in
-  your Permit actions module can be used.
+  Use `action(:name)` to grant a specific action unconditionally, or
+  `action(:name, field: value)` to add conditions. Use `action(:all)` or
+  `action(:all, field: value)` to grant every action defined in the domain's
+  actions module.
 
   Use `Permit.Ash.DomainPermissions` to aggregate rules from all resources in
   a domain into a `Permit.Permissions`-compatible `can/1` callback.
@@ -48,7 +48,7 @@ defmodule Permit.Ash.Resource do
   @action_entity %Spark.Dsl.Entity{
     name: :action,
     describe: "Grants permission for a specific action inside a for_actor block.",
-    args: [:action_name, :conditions],
+    args: [:action_name, {:optional, :conditions, []}],
     target: Permit.Ash.Resource.ActionRule,
     schema: [
       action_name: [
@@ -58,8 +58,9 @@ defmodule Permit.Ash.Resource do
       ],
       conditions: [
         type: :quoted,
-        required: true,
-        doc: "Keyword-list conditions, e.g. [user_id: user_id]. Pass [] for unconditional."
+        required: false,
+        default: [],
+        doc: "Optional keyword-list conditions, e.g. [user_id: user_id]. Omit for unconditional."
       ]
     ]
   }
@@ -70,7 +71,6 @@ defmodule Permit.Ash.Resource do
     args: [:pattern],
     target: Permit.Ash.Resource.ActorRule,
     entities: [rules: [@action_entity]],
-
     schema: [
       pattern: [
         type: :quoted,

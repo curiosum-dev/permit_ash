@@ -16,7 +16,7 @@ defmodule Permit.Ash.DomainPermissions do
   implement it), and merges the resulting rules into a `%Permit.Permissions{}`
   struct.
 
-  The `:all` sentinel action — declared with `action(:all, [])` in a
+  The `:all` sentinel action — declared with `action(:all)` in a
   `for_actor` block — is expanded to every action group defined in the
   `actions_module`.
 
