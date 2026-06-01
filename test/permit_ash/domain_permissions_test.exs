@@ -40,7 +40,7 @@ defmodule Permit.Ash.DomainPermissionsTest do
   end
 
   # ---------------------------------------------------------------------------
-  # admin role — all() expands to every action group
+  # admin role — action(:all, []) expands to every action group
   # ---------------------------------------------------------------------------
 
   describe "admin role" do
@@ -66,7 +66,7 @@ defmodule Permit.Ash.DomainPermissionsTest do
 
     test "has permission on custom mapped action (publish → update)" do
       post = create_post!()
-      # :publish is in the AshActions grouping schema so all() covers it too.
+      # :publish is in the AshActions grouping schema so action(:all, []) covers it too.
       assert granted?(%{role: :admin}, :publish, post)
     end
   end

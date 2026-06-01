@@ -14,12 +14,12 @@ defmodule Permit.Ash.Resource do
           map_action :archive, to: :update
 
           for_actor %User{role: :admin} do
-            all()
+            action(:all, [])
           end
 
           for_actor %User{id: user_id} do
-            read()
-            update(user_id: user_id)
+            action(:read, [])
+            action(:update, [user_id: user_id])
           end
         end
       end
@@ -36,9 +36,10 @@ defmodule Permit.Ash.Resource do
   Declares authorization rules for a specific actor pattern. The pattern is
   matched at runtime, and the block specifies which actions are permitted.
 
-  Use the helper macros `read/0,1`, `create/0,1`, `update/0,1`, `destroy/0,1`,
-  and `all/0,1` inside the block. Each accepts an optional keyword list of
-  conditions.
+  Use `action(:name, conditions)` to grant a specific action, or
+  `action(:all, [])` to grant every action defined in the domain's actions
+  module. No action names are hard-coded — any atom that is a valid action in
+  your Permit actions module can be used.
 
   Use `Permit.Ash.DomainPermissions` to aggregate rules from all resources in
   a domain into a `Permit.Permissions`-compatible `can/1` callback.
@@ -69,7 +70,7 @@ defmodule Permit.Ash.Resource do
     args: [:pattern],
     target: Permit.Ash.Resource.ActorRule,
     entities: [rules: [@action_entity]],
-    imports: [Permit.Ash.Resource.ActionDSL],
+
     schema: [
       pattern: [
         type: :quoted,

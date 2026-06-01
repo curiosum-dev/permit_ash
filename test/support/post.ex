@@ -50,13 +50,13 @@ defmodule Permit.Ash.Test.Post do
 
     # for_actor rules used by DomainPermissions tests.
     for_actor %{role: :admin} do
-      all()
+      action(:all, [])
     end
 
     for_actor %{id: user_id, role: :owner} do
-      read()
-      create()
-      update(user_id: user_id)
+      action(:read, [])
+      action(:create, [])
+      action(:update, [user_id: user_id])
     end
   end
 
