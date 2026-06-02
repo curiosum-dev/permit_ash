@@ -6,6 +6,11 @@ defmodule Permit.Ash.Authorizer do
   alias Permit.Ash.Domain.Info, as: DomainInfo
   alias Permit.Ash.FilterBuilder
 
+  # Ash.Authorizer types the `resource` argument of initial_state/4 as
+  # Ash.Resource.Record.t() (= struct()), but Ash actually passes the resource
+  # MODULE (an atom) at runtime. Suppress the false-positive callback mismatch.
+  @dialyzer {:nowarn_function, initial_state: 4}
+
   @impl true
   def initial_state(actor, resource, action, domain) do
     # Authorization module configured in :domain via spark dsl
@@ -18,14 +23,24 @@ defmodule Permit.Ash.Authorizer do
       domain: domain,
       # Ash :actor <=> Permit :subject
       # Ash :resource <=> Permit :resource (module or struct)
-      # Ash :action's :name <=> Permit :action
+      # Ash :action's :name <=> Permit :action (resolved via map_action if declared)
       permit: %{
         subject: actor,
         resource: resource,
-        action: action.name,
+        action: resolve_permit_action(resource, action),
         authorization_module: authorization_module
       }
     }
+  end
+
+  # Resolves the Permit action atom for a given Ash action.
+  # Checks for an explicit map_action declaration on the resource first;
+  # falls back to the Ash action name directly if none is found.
+  defp resolve_permit_action(resource, action) do
+    case Permit.Ash.Resource.Info.action_mapping(resource, action.name) do
+      {:ok, permit_action} -> permit_action
+      :error -> action.name
+    end
   end
 
   @impl true

@@ -3,7 +3,8 @@ defmodule Permit.Ash.Test.Post do
   use Ash.Resource,
     domain: Permit.Ash.Test.Domain,
     data_layer: Ash.DataLayer.Ets,
-    authorizers: [Permit.Ash.Authorizer]
+    authorizers: [Permit.Ash.Authorizer],
+    extensions: [Permit.Ash.Resource]
 
   ets do
     # Private tables are scoped to the owning process, giving each test process
@@ -44,6 +45,10 @@ defmodule Permit.Ash.Test.Post do
     end
   end
 
+  permit do
+    map_action(:publish, to: :update)
+  end
+
   actions do
     defaults([:read, :destroy])
 
@@ -53,6 +58,12 @@ defmodule Permit.Ash.Test.Post do
 
     update :update do
       accept([:title, :published, :score])
+    end
+
+    # Custom update action used to test map_action resolution: :publish maps
+    # to the Permit :update action, so update permissions cover it.
+    update :publish do
+      accept [:published]
     end
   end
 end

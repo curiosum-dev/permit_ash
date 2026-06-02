@@ -33,7 +33,8 @@ defmodule Permit.Ash.MixProject do
       {:permit, "~> 0.4.1"},
       {:credo, "~> 1.7", only: [:dev, :test], runtime: false},
       {:dialyxir, "~> 1.4", only: [:dev, :test], runtime: false},
-      {:sobelow, "~> 0.13", only: [:dev, :test], runtime: false}
+      {:sobelow, "~> 0.13", only: [:dev, :test], runtime: false},
+      {:sourceror, "~> 1.12", only: [:dev, :test]}
     ]
   end
 end
