@@ -24,6 +24,7 @@ defmodule Permit.Ash.Resource.Info do
   def action_mapping(resource, action_name) do
     resource
     |> permit()
+    |> Enum.filter(&match?(%Permit.Ash.Resource.ActionMapping{}, &1))
     |> Enum.find(&(&1.action_name == action_name))
     |> case do
       nil -> :error
