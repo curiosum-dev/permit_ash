@@ -11,5 +11,6 @@ defmodule Permit.Ash.Test.Domain do
   resources do
     resource(Permit.Ash.Test.Post)
     resource(Permit.Ash.Test.Author)
+    resource(Permit.Ash.Test.PostActorFirst)
   end
 end
